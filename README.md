@@ -54,6 +54,11 @@ If you prefer running services individually for development:
 
 **1. Database**
 ```bash
+# Copy example environment file
+cp .env.example .env
+# Edit .env to set your secure password
+# nano .env
+
 # Start PostgreSQL via Docker
 docker compose up db -d
 ```
