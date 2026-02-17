@@ -72,6 +72,36 @@ app.put('/api/books/:id', async (req, res) => {
     }
 });
 
+// ─── DELETE book ────────────────────────────────────────
+app.delete('/api/books/:id', async (req, res) => {
+    const client = await pool.connect();
+    try {
+        const { id } = req.params;
+        await client.query('BEGIN');
+
+        // 1. Delete all expenses in this book
+        await client.query('DELETE FROM expenses WHERE book_id = $1', [id]);
+
+        // 2. Delete the book
+        const result = await client.query('DELETE FROM books WHERE id = $1', [id]);
+
+        if (result.rowCount === 0) {
+            await client.query('ROLLBACK');
+            res.status(404).json({ error: 'Book not found' });
+            return;
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('DELETE /api/books/:id error:', err);
+        res.status(500).json({ error: 'Failed to delete book' });
+    } finally {
+        client.release();
+    }
+});
+
 // ─── GET expenses (filtered by book) ────────────────────
 app.get('/api/expenses', async (req, res) => {
     try {

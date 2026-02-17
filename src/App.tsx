@@ -21,6 +21,7 @@ function App() {
         selectBook,
         createBook,
         renameBook,
+        deleteBook,
         loading,
         isOnline,
     } = useExpenses();
@@ -86,6 +87,7 @@ function App() {
                                     onSelectBook={selectBook}
                                     onCreateBook={createBook}
                                     onRenameBook={renameBook}
+                                    onDeleteBook={deleteBook}
                                 />
                                 {currentBook && !currentBook.end_date ? (
                                     <ExpenseForm onAdd={addExpense} />

@@ -175,6 +175,25 @@ export function useExpenses() {
         }
     }, [isOnline, currentBook]);
 
+    const deleteBook = useCallback(async (id: string) => {
+        const result = await tryFetch<{ success: boolean }>(`${API_URL}/api/books/${id}`, {
+            method: 'DELETE',
+        });
+
+        if (result) {
+            setBooks(prev => {
+                const newBooks = prev.filter(b => b.id !== id);
+                // If we deleted the current book, switch to another one
+                if (currentBook?.id === id) {
+                    const nextBook = newBooks[0] || null;
+                    setCurrentBook(nextBook);
+                }
+                saveLocal(STORAGE_KEY_BOOKS, newBooks);
+                return newBooks;
+            });
+        }
+    }, [books, currentBook]);
+
     return {
         expenses,
         books,
@@ -187,6 +206,7 @@ export function useExpenses() {
         closeBook,
         selectBook,
         createBook,
-        renameBook
+        renameBook,
+        deleteBook
     };
 }

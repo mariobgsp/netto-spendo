@@ -7,6 +7,7 @@ interface BookListProps {
     onSelectBook: (book: Book) => void;
     onCreateBook: (name: string) => void;
     onRenameBook: (id: string, name: string) => void;
+    onDeleteBook: (id: string) => void;
 }
 
 export const BookList: React.FC<BookListProps> = ({
@@ -15,6 +16,7 @@ export const BookList: React.FC<BookListProps> = ({
     onSelectBook,
     onCreateBook,
     onRenameBook,
+    onDeleteBook,
 }) => {
     const [isCreating, setIsCreating] = useState(false);
     const [newBookName, setNewBookName] = useState('');
@@ -110,6 +112,22 @@ export const BookList: React.FC<BookListProps> = ({
                                         title="Ubah Nama"
                                     >
                                         ✎
+                                    </button>
+                                    <button
+                                        className="btn-xs delete-book"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (
+                                                window.confirm(
+                                                    `Hapus buku "${book.name}" beserta semua transaksinya?`
+                                                )
+                                            ) {
+                                                onDeleteBook(book.id);
+                                            }
+                                        }}
+                                        title="Hapus Buku"
+                                    >
+                                        🗑️
                                     </button>
                                 </div>
                             </div>
