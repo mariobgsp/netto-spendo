@@ -5,11 +5,26 @@ import { ExpenseList } from './components/ExpenseList';
 import { SpendingChart } from './components/SpendingChart';
 import { SummaryCards } from './components/SummaryCards';
 import { CloseBookModal } from './components/CloseBookModal';
+import { BookList } from './components/BookList';
 import type { ChartView } from './types';
 import './index.css';
 
 function App() {
-    const { expenses, addExpense, updateExpense, deleteExpense, closeBook, loading, isOnline } = useExpenses();
+    const {
+        expenses,
+        books,
+        currentBook,
+        addExpense,
+        updateExpense,
+        deleteExpense,
+        closeBook,
+        selectBook,
+        createBook,
+        renameBook,
+        deleteBook,
+        loading,
+        isOnline,
+    } = useExpenses();
     const [chartView, setChartView] = useState<ChartView>('weekly');
     const [isCloseBookOpen, setIsCloseBookOpen] = useState(false);
 
@@ -27,15 +42,18 @@ function App() {
                 <div className="header-content">
                     <div className="brand">
                         <h1>Netto Spendo</h1>
+                        {currentBook && <span className="current-book-badge">{currentBook.name}</span>}
                         {!isOnline && <span className="offline-badge">Offline Mode</span>}
                     </div>
-                    <button
-                        className="btn-close-book"
-                        onClick={() => setIsCloseBookOpen(true)}
-                        title="Tutup Buku Periode Ini"
-                    >
-                        📦 Tutup Buku
-                    </button>
+                    {currentBook && !currentBook.end_date && (
+                        <button
+                            className="btn-close-book"
+                            onClick={() => setIsCloseBookOpen(true)}
+                            title="Tutup Buku Periode Ini"
+                        >
+                            📦 Tutup Buku
+                        </button>
+                    )}
                 </div>
             </header>
 
@@ -63,7 +81,25 @@ function App() {
                                 />
                             </div>
                             <div className="side-col">
-                                <ExpenseForm onAdd={addExpense} />
+                                <BookList
+                                    books={books}
+                                    currentBook={currentBook}
+                                    onSelectBook={selectBook}
+                                    onCreateBook={createBook}
+                                    onRenameBook={renameBook}
+                                    onDeleteBook={deleteBook}
+                                />
+                                {currentBook && !currentBook.end_date ? (
+                                    <ExpenseForm onAdd={addExpense} />
+                                ) : (
+                                    <div className="card info-card">
+                                        <p>
+                                            {currentBook
+                                                ? 'Buku ini telah ditutup. Anda tidak dapat menambah transaksi.'
+                                                : 'Silakan pilih atau buat buku baru.'}
+                                        </p>
+                                    </div>
+                                )}
                             </div>
                         </div>
                     </>

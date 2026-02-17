@@ -13,10 +13,14 @@
 -   **Interactive Charts**: Visualize spending trends over weekly, monthly, and yearly periods.
 -   **Summary Cards**: Quick stats for Today, This Week, This Month, and This Year.
 
-### 3. **Book Closing (Tutup Buku)**
--   **Close Accounting Period**: Reset your tracking at the end of a month or year.
--   **Carry Forward**: Option to automatically carry your remaining balance forward as the starting balance for the new period.
--   **Start Fresh**: Option to archive old data and start from zero.
+### 3. **Book Management (Buku Kas)**
+-   **Multiple Books**: Create different books for different events (e.g., "Monthly Budget", "Bali Trip", "Wedding").
+-   **Easy Switching**: seamless switching between active books.
+-   **Book Lifecycle**:
+    -   **Create**: Start a new book at any time.
+    -   **Rename**: Edit book names for better organization.
+    -   **Close**: Mark a book as "Closed" to prevent new transactions.
+    -   **Carry Forward**: Automatically transfer remaining balance to a new book upon closing.
 
 ### 4. **Clean Minimalist Design**
 -   **Focus Mode**: A distraction-free "Dark Zinc" theme designed for readability.
@@ -37,14 +41,20 @@
 
 Run the entire application stack with a single command using Docker:
 
-```bash
-# Start all services (PostgreSQL + Backend + Frontend)
-docker compose up --build
-```
+1.  **Configure Environment**:
+    ```bash
+    cp .env.example .env
+    # Optionally edit .env to set your secrets
+    ```
 
-Access the application:
--   **Web App**: [http://localhost:5173](http://localhost:5173)
--   **API**: [http://localhost:3001/api/expenses](http://localhost:3001/api/expenses)
+2.  **Start Services**:
+    ```bash
+    docker compose up --build
+    ```
+
+3.  **Access Application**:
+    -   **Web App**: [http://localhost:5173](http://localhost:5173)
+    -   **API**: [http://localhost:3001/api/expenses](http://localhost:3001/api/expenses)
 
 ---
 
@@ -56,7 +66,7 @@ If you prefer running services individually for development:
 ```bash
 # Copy example environment file
 cp .env.example .env
-# Edit .env to set your secure password
+# Edit .env to set your secure password (default is 'netto_password_secure')
 # nano .env
 
 # Start PostgreSQL via Docker
@@ -83,13 +93,22 @@ npm run dev
 
 ## API Reference
 
+### Expenses
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `GET` | `/api/expenses` | List all active (unarchived) transactions |
-| `POST` | `/api/expenses` | Create a new transaction (income/expense) |
-| `PUT` | `/api/expenses/:id` | Update an existing transaction |
+| `GET` | `/api/expenses?bookId={id}` | List transactions for a specific book |
+| `POST` | `/api/expenses` | Create a new transaction |
+| `PUT` | `/api/expenses/:id` | Update a transaction |
 | `DELETE` | `/api/expenses/:id` | Delete a transaction |
-| `POST` | `/api/expenses/close-book` | Close current period (Archive + optional Carry Forward) |
+| `POST` | `/api/expenses/close-book` | Close current book (Archive + optional Carry Forward) |
+
+### Books
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/books` | List all books |
+| `POST` | `/api/books` | Create a new book |
+| `PUT` | `/api/books/:id` | Rename a book |
+| `DELETE` | `/api/books/:id` | Delete a book (and all its data) |
 
 ---
 
