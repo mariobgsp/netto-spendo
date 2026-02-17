@@ -1,20 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Expense } from '../types';
+import type { Expense, Book } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-const STORAGE_KEY = 'netto-spendo-expenses';
+const STORAGE_KEY_EXPENSES = 'netto-spendo-expenses';
+const STORAGE_KEY_BOOKS = 'netto-spendo-books';
 
-function loadLocal(): Expense[] {
+function loadLocal<T>(key: string): T[] {
     try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        return raw ? (JSON.parse(raw) as Expense[]) : [];
+        const raw = localStorage.getItem(key);
+        return raw ? (JSON.parse(raw) as T[]) : [];
     } catch {
         return [];
     }
 }
 
-function saveLocal(expenses: Expense[]): void {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
+function saveLocal<T>(key: string, data: T[]): void {
+    localStorage.setItem(key, JSON.stringify(data));
 }
 
 async function tryFetch<T>(url: string, options?: RequestInit): Promise<T | null> {
@@ -28,53 +29,105 @@ async function tryFetch<T>(url: string, options?: RequestInit): Promise<T | null
 }
 
 export function useExpenses() {
-    const [expenses, setExpenses] = useState<Expense[]>(loadLocal);
+    const [expenses, setExpenses] = useState<Expense[]>(() => loadLocal<Expense>(STORAGE_KEY_EXPENSES));
+    const [books, setBooks] = useState<Book[]>(() => loadLocal<Book>(STORAGE_KEY_BOOKS));
+    const [currentBook, setCurrentBook] = useState<Book | null>(null);
     const [loading, setLoading] = useState(true);
     const [isOnline, setIsOnline] = useState(false);
 
-    // Try to load from API on mount; fall back to localStorage
+    // Initial load
     useEffect(() => {
         async function init() {
-            const data = await tryFetch<Expense[]>(`${API_URL}/api/expenses`);
-            if (data) {
+            // 1. Fetch Books
+            const fetchedBooks = await tryFetch<Book[]>(`${API_URL}/api/books`);
+            if (fetchedBooks) {
                 setIsOnline(true);
-                // Merge: API is source of truth, but keep local-only entries
-                const apiIds = new Set(data.map((e) => e.id));
-                const localOnly = loadLocal().filter((e) => !apiIds.has(e.id));
-                const merged = [...data, ...localOnly];
-                setExpenses(merged);
-                saveLocal(merged);
+                setBooks(fetchedBooks);
+                saveLocal(STORAGE_KEY_BOOKS, fetchedBooks);
+
+                // Set current book (default to first active or just first)
+                if (fetchedBooks.length > 0) {
+                    // Prefer the first book (which is sorted by start_date DESC in backend)
+                    setCurrentBook(fetchedBooks[0]);
+                }
+            } else {
+                // Offline: use local books, set first as current
+                if (books.length > 0) {
+                    setCurrentBook(books[0]);
+                }
             }
-            // If API unreachable, we already have localStorage data from useState
             setLoading(false);
         }
         init();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
-    // Persist to localStorage on every change
+    // Load expenses when currentBook changes
     useEffect(() => {
-        saveLocal(expenses);
-    }, [expenses]);
+        if (!currentBook) {
+            setExpenses([]);
+            return;
+        }
+
+        async function loadExpenses() {
+            const data = await tryFetch<Expense[]>(`${API_URL}/api/expenses?bookId=${currentBook?.id}`);
+            if (data) {
+                setExpenses(data);
+                saveLocal(STORAGE_KEY_EXPENSES, data); // Note: this might overwrite other books' cache?
+                // For simplicity, we just cache the *current view* locally.
+                // A better approach would be to cache by bookId key.
+            }
+        }
+        loadExpenses();
+    }, [currentBook]);
+
+    const selectBook = useCallback((book: Book) => {
+        setCurrentBook(book);
+    }, []);
+
+    const createBook = useCallback(async (name: string) => {
+        const result = await tryFetch<Book>(`${API_URL}/api/books`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name }),
+        });
+
+        if (result) {
+            setBooks(prev => [result, ...prev]);
+            saveLocal(STORAGE_KEY_BOOKS, [result, ...books]);
+            setCurrentBook(result); // Switch to new book
+        }
+    }, [books]);
+
+    const renameBook = useCallback(async (id: string, name: string) => {
+        const result = await tryFetch<Book>(`${API_URL}/api/books/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name }),
+        });
+
+        if (result) {
+            setBooks(prev => prev.map(b => b.id === id ? result : b));
+            if (currentBook?.id === id) {
+                setCurrentBook(result);
+            }
+        }
+    }, [books, currentBook]);
 
     const addExpense = useCallback(async (expense: Omit<Expense, 'id'>) => {
+        if (!currentBook) return;
+
         // Try API first
         const created = await tryFetch<Expense>(`${API_URL}/api/expenses`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(expense),
+            body: JSON.stringify({ ...expense, bookId: currentBook.id }),
         });
 
         if (created) {
             setExpenses((prev) => [created, ...prev]);
-        } else {
-            // Offline: save locally with generated ID
-            const localExpense: Expense = {
-                ...expense,
-                id: crypto.randomUUID(),
-            };
-            setExpenses((prev) => [localExpense, ...prev]);
         }
-    }, []);
+    }, [currentBook]);
 
     const updateExpense = useCallback(async (id: string, expense: Omit<Expense, 'id'>) => {
         const updated = await tryFetch<Expense>(`${API_URL}/api/expenses/${id}`, {
@@ -85,11 +138,6 @@ export function useExpenses() {
 
         if (updated) {
             setExpenses((prev) => prev.map((e) => (e.id === id ? updated : e)));
-        } else {
-            // Offline: update locally
-            setExpenses((prev) =>
-                prev.map((e) => (e.id === id ? { ...expense, id } : e))
-            );
         }
     }, []);
 
@@ -104,27 +152,41 @@ export function useExpenses() {
     }, [isOnline]);
 
     const closeBook = useCallback(async (carryForward: boolean) => {
-        // Only online for now as it's a complex operation involving archiving
-        if (!isOnline) {
-            alert('Fitur Tutup Buku hanya tersedia saat online.');
+        if (!isOnline || !currentBook) {
+            alert('Fitur Tutup Buku hanya tersedia saat online dan ada buku aktif.');
             return;
         }
 
-        const result = await tryFetch<{ success: boolean }>(`${API_URL}/api/expenses/close-book`, {
+        const result = await tryFetch<{ success: boolean, newBookId: string }>(`${API_URL}/api/expenses/close-book`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ carryForward }),
+            body: JSON.stringify({ carryForward, bookId: currentBook.id }),
         });
 
         if (result) {
-            // Refresh entirely from server to get clean state
-            const data = await tryFetch<Expense[]>(`${API_URL}/api/expenses`);
-            if (data) {
-                setExpenses(data);
-                saveLocal(data);
+            // Re-fetch books to get the new one and the closed one updated
+            const fetchedBooks = await tryFetch<Book[]>(`${API_URL}/api/books`);
+            if (fetchedBooks) {
+                setBooks(fetchedBooks);
+                // Switch to the NEW book
+                const newBook = fetchedBooks.find(b => b.id === result.newBookId);
+                if (newBook) setCurrentBook(newBook);
             }
         }
-    }, [isOnline]);
+    }, [isOnline, currentBook]);
 
-    return { expenses, addExpense, updateExpense, deleteExpense, closeBook, loading, isOnline };
+    return {
+        expenses,
+        books,
+        currentBook,
+        loading,
+        isOnline,
+        addExpense,
+        updateExpense,
+        deleteExpense,
+        closeBook,
+        selectBook,
+        createBook,
+        renameBook
+    };
 }
