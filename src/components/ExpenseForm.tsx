@@ -80,7 +80,7 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ onAdd, labels }) => {
                         id="amount"
                         type="number"
                         min="0"
-                        step="100"
+                        step="0.001"
                         placeholder="50000"
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
