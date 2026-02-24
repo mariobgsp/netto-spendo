@@ -1,24 +1,30 @@
 import React, { useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import { id } from 'date-fns/locale';
-import type { Expense, TransactionType } from '../types';
+import type { Expense, TransactionType, Label } from '../types';
 
 interface ExpenseListProps {
     expenses: Expense[];
+    labels: Label[];
     onEdit: (id: string, expense: Omit<Expense, 'id'>) => void | Promise<void>;
     onDelete: (id: string) => void;
 }
 
-export const ExpenseList: React.FC<ExpenseListProps> = ({ expenses, onEdit, onDelete }) => {
+export const ExpenseList: React.FC<ExpenseListProps> = ({ expenses, labels, onEdit, onDelete }) => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editType, setEditType] = useState<TransactionType>('expense');
     const [editAmount, setEditAmount] = useState('');
     const [editDescription, setEditDescription] = useState('');
     const [editDate, setEditDate] = useState('');
+    const [editLabelId, setEditLabelId] = useState('');
 
     const sortedExpenses = useMemo(() => {
         return [...expenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     }, [expenses]);
+
+    const labelMap = useMemo(() => {
+        return new Map(labels.map(l => [l.id, l]));
+    }, [labels]);
 
     const formatCurrency = (amount: number, type: TransactionType) => {
         const formatted = new Intl.NumberFormat('id-ID', {
@@ -35,6 +41,7 @@ export const ExpenseList: React.FC<ExpenseListProps> = ({ expenses, onEdit, onDe
         setEditType(expense.type || 'expense');
         setEditAmount(expense.amount.toString());
         setEditDescription(expense.description);
+        setEditLabelId(expense.label_id || '');
         const d = new Date(expense.date);
         const offset = d.getTimezoneOffset();
         const local = new Date(d.getTime() - offset * 60000);
@@ -55,6 +62,7 @@ export const ExpenseList: React.FC<ExpenseListProps> = ({ expenses, onEdit, onDe
             description: editDescription.trim(),
             date: new Date(editDate).toISOString(),
             type: editType,
+            label_id: editLabelId || undefined,
         });
         setEditingId(null);
     };
@@ -139,6 +147,26 @@ export const ExpenseList: React.FC<ExpenseListProps> = ({ expenses, onEdit, onDe
                                             onKeyDown={handleKeyDown}
                                         />
                                     </div>
+                                    <div className="edit-field">
+                                        <label>Label</label>
+                                        <div className="label-select-wrapper">
+                                            {editLabelId && labelMap.get(editLabelId) && (
+                                                <span className="label-dot" style={{ background: labelMap.get(editLabelId)!.color }} />
+                                            )}
+                                            <select
+                                                value={editLabelId}
+                                                onChange={e => setEditLabelId(e.target.value)}
+                                                className="label-select"
+                                            >
+                                                <option value="">— Tanpa Label —</option>
+                                                {labels.map(l => (
+                                                    <option key={l.id} value={l.id}>{l.name}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="edit-row">
                                     <div className="edit-actions">
                                         <button className="btn-save" onClick={saveEdit}>
                                             ✓ Simpan
@@ -152,7 +180,21 @@ export const ExpenseList: React.FC<ExpenseListProps> = ({ expenses, onEdit, onDe
                         ) : (
                             <>
                                 <div className="expense-info">
-                                    <span className="expense-desc">{expense.description}</span>
+                                    <div className="expense-desc-row">
+                                        <span className="expense-desc">{expense.description}</span>
+                                        {expense.label_id && labelMap.get(expense.label_id) && (() => {
+                                            const lbl = labelMap.get(expense.label_id!)!;
+                                            return (
+                                                <span
+                                                    className="label-badge"
+                                                    style={{ background: lbl.color + '28', color: lbl.color, borderColor: lbl.color + '55' }}
+                                                >
+                                                    <span className="label-dot" style={{ background: lbl.color }} />
+                                                    {lbl.name}
+                                                </span>
+                                            );
+                                        })()}
+                                    </div>
                                     <span className="expense-date">
                                         {format(new Date(expense.date), 'dd MMM yyyy, HH:mm', { locale: id })}
                                     </span>
@@ -189,3 +231,4 @@ export const ExpenseList: React.FC<ExpenseListProps> = ({ expenses, onEdit, onDe
         </div>
     );
 };
+

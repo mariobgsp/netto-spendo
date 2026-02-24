@@ -882,3 +882,280 @@ body {
   color: var(--text-secondary);
   margin-left: 1rem;
 }
+
+/* ========== Label Manager ========== */
+.label-manager-container {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 1.125rem 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.label-manager-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.625rem;
+}
+
+.label-manager-header h3 {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.label-empty-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.label-preview-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.label-manager-body {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.label-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.label-item {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.35rem;
+}
+
+.label-item:last-child {
+  border-bottom: none;
+}
+
+.label-item-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.label-name {
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--text-primary);
+}
+
+.label-item-actions {
+  display: flex;
+  gap: 0.25rem;
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+
+.label-item:hover .label-item-actions {
+  opacity: 1;
+}
+
+.label-edit-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.label-name-input {
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 0.375rem 0.5rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+  outline: none;
+}
+
+.label-name-input:focus {
+  border-color: var(--border-focus);
+}
+
+.label-color-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+}
+
+.color-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: transform var(--transition), border-color var(--transition);
+  padding: 0;
+}
+
+.color-swatch:hover {
+  transform: scale(1.15);
+}
+
+.color-swatch.selected {
+  border-color: var(--text-primary);
+  transform: scale(1.15);
+}
+
+.label-edit-actions {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.label-add-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+.btn-add-label {
+  width: 100%;
+  padding: 0.5rem;
+  background: var(--text-primary);
+  color: var(--bg-deep);
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--transition);
+}
+
+.btn-add-label:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.btn-add-label:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* ========== Label Badge ========== */
+.label-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid;
+  white-space: nowrap;
+}
+
+.label-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  display: inline-block;
+}
+
+/* ========== Expense Desc Row ========== */
+.expense-desc-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ========== Label Select ========== */
+.label-select-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.label-select {
+  flex: 1;
+  width: 100%;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  padding: 0.625rem 0.75rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+  transition: all var(--transition);
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+  padding-right: 2rem;
+}
+
+.label-select:focus {
+  border-color: var(--border-focus);
+}
+
+/* Edit field label-select smaller */
+.edit-field .label-select {
+  padding: 0.375rem 2rem 0.375rem 0.5rem;
+  font-size: 0.85rem;
+  border-radius: var(--radius-sm);
+}
+
+/* ========== Empty chart state ========== */
+.chart-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.chart-empty span {
+  font-size: 2.5rem;
+}
+
+.chart-empty .empty-sub {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+/* ========== Misc: empty state ========== */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem;
+  gap: 0.5rem;
+  color: var(--text-muted);
+}
+
+.empty-icon {
+  font-size: 2rem;
+}
+
+.empty-sub {
+  font-size: 0.8rem;
+}
+
+.list-icon {
+  margin-right: 0.25rem;
+}

@@ -8,6 +8,13 @@ export interface Book {
 
 export type TransactionType = 'expense' | 'income';
 
+export interface Label {
+    id: string;
+    name: string;
+    color: string; // hex color e.g. '#4ade80'
+    created_at?: string;
+}
+
 export interface Expense {
     id: string;
     amount: number;
@@ -16,6 +23,7 @@ export interface Expense {
     type: TransactionType;
     is_archived?: boolean; // For "Tutup Buku" feature
     book_id?: string;
+    label_id?: string;
 }
 
-export type ChartView = 'weekly' | 'monthly' | 'yearly';
+export type ChartView = 'weekly' | 'monthly' | 'yearly' | 'label';

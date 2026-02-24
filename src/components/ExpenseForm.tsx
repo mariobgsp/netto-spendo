@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import type { Expense, TransactionType } from '../types';
+import type { Expense, TransactionType, Label } from '../types';
 
 interface ExpenseFormProps {
     onAdd: (expense: Omit<Expense, 'id'>) => void | Promise<void>;
+    labels: Label[];
 }
 
-export const ExpenseForm: React.FC<ExpenseFormProps> = ({ onAdd }) => {
+export const ExpenseForm: React.FC<ExpenseFormProps> = ({ onAdd, labels }) => {
     const [type, setType] = useState<TransactionType>('expense');
     const [amount, setAmount] = useState('');
     const [description, setDescription] = useState('');
+    const [labelId, setLabelId] = useState('');
     const [date, setDate] = useState(() => {
         const now = new Date();
         const offset = now.getTimezoneOffset();
@@ -28,18 +30,21 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ onAdd }) => {
             description: description.trim(),
             date: new Date(date).toISOString(),
             type,
+            label_id: labelId || undefined,
         });
 
         setAmount('');
         setDescription('');
+        setLabelId('');
         const now = new Date();
         const offset = now.getTimezoneOffset();
         const local = new Date(now.getTime() - offset * 60000);
         setDate(local.toISOString().slice(0, 16));
-        // Keep the same type for convenience, or reset? Let's keep it.
 
         setTimeout(() => setIsSubmitting(false), 300);
     };
+
+    const selectedLabel = labels.find(l => l.id === labelId);
 
     return (
         <form className={`expense-form ${isSubmitting ? 'submitted' : ''}`} onSubmit={handleSubmit}>
@@ -95,6 +100,25 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ onAdd }) => {
                 />
             </div>
             <div className="form-group">
+                <label htmlFor="label">Label</label>
+                <div className="label-select-wrapper">
+                    {selectedLabel && (
+                        <span className="label-dot" style={{ background: selectedLabel.color }} />
+                    )}
+                    <select
+                        id="label"
+                        value={labelId}
+                        onChange={e => setLabelId(e.target.value)}
+                        className="label-select"
+                    >
+                        <option value="">— Tanpa Label —</option>
+                        {labels.map(l => (
+                            <option key={l.id} value={l.id}>{l.name}</option>
+                        ))}
+                    </select>
+                </div>
+            </div>
+            <div className="form-group">
                 <label htmlFor="date">Waktu</label>
                 <input
                     id="date"
@@ -110,3 +134,4 @@ export const ExpenseForm: React.FC<ExpenseFormProps> = ({ onAdd }) => {
         </form>
     );
 };
+
