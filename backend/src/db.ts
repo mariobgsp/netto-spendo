@@ -44,6 +44,20 @@ export async function initDB(): Promise<void> {
       ALTER TABLE expenses ADD COLUMN IF NOT EXISTS book_id UUID REFERENCES books(id);
     `);
 
+    // ─── Labels ────────────────────────────────────────────
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS labels (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        name TEXT NOT NULL,
+        color TEXT NOT NULL DEFAULT '#a1a1aa',
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
+
+    await client.query(`
+      ALTER TABLE expenses ADD COLUMN IF NOT EXISTS label_id UUID REFERENCES labels(id) ON DELETE SET NULL;
+    `);
+
     // Migration: Create default book if none exists and assign existing expenses
     const bookResult = await client.query('SELECT id FROM books LIMIT 1');
     if (bookResult.rowCount === 0) {

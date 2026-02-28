@@ -6,6 +6,7 @@ import { SpendingChart } from './components/SpendingChart';
 import { SummaryCards } from './components/SummaryCards';
 import { CloseBookModal } from './components/CloseBookModal';
 import { BookList } from './components/BookList';
+import { LabelManager } from './components/LabelManager';
 import type { ChartView } from './types';
 import './index.css';
 
@@ -13,6 +14,7 @@ function App() {
     const {
         expenses,
         books,
+        labels,
         currentBook,
         addExpense,
         updateExpense,
@@ -22,6 +24,9 @@ function App() {
         createBook,
         renameBook,
         deleteBook,
+        addLabel,
+        updateLabel,
+        deleteLabel,
         loading,
         isOnline,
     } = useExpenses();
@@ -71,11 +76,13 @@ function App() {
                             <div className="main-col">
                                 <SpendingChart
                                     expenses={expenses}
+                                    labels={labels}
                                     view={chartView}
                                     onViewChange={setChartView}
                                 />
                                 <ExpenseList
                                     expenses={expenses}
+                                    labels={labels}
                                     onEdit={updateExpense}
                                     onDelete={deleteExpense}
                                 />
@@ -89,8 +96,14 @@ function App() {
                                     onRenameBook={renameBook}
                                     onDeleteBook={deleteBook}
                                 />
+                                <LabelManager
+                                    labels={labels}
+                                    onAdd={addLabel}
+                                    onUpdate={updateLabel}
+                                    onDelete={deleteLabel}
+                                />
                                 {currentBook && !currentBook.end_date ? (
-                                    <ExpenseForm onAdd={addExpense} />
+                                    <ExpenseForm onAdd={addExpense} labels={labels} />
                                 ) : (
                                     <div className="card info-card">
                                         <p>

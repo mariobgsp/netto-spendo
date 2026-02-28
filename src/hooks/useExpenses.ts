@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import type { Expense, Book } from '../types';
+import type { Expense, Book, Label } from '../types';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 const STORAGE_KEY_EXPENSES = 'netto-spendo-expenses';
 const STORAGE_KEY_BOOKS = 'netto-spendo-books';
+const STORAGE_KEY_LABELS = 'netto-spendo-labels';
 
 function loadLocal<T>(key: string): T[] {
     try {
@@ -31,6 +32,7 @@ async function tryFetch<T>(url: string, options?: RequestInit): Promise<T | null
 export function useExpenses() {
     const [expenses, setExpenses] = useState<Expense[]>(() => loadLocal<Expense>(STORAGE_KEY_EXPENSES));
     const [books, setBooks] = useState<Book[]>(() => loadLocal<Book>(STORAGE_KEY_BOOKS));
+    const [labels, setLabels] = useState<Label[]>(() => loadLocal<Label>(STORAGE_KEY_LABELS));
     const [currentBook, setCurrentBook] = useState<Book | null>(null);
     const [loading, setLoading] = useState(true);
     const [isOnline, setIsOnline] = useState(false);
@@ -56,6 +58,14 @@ export function useExpenses() {
                     setCurrentBook(books[0]);
                 }
             }
+
+            // 2. Fetch Labels
+            const fetchedLabels = await tryFetch<Label[]>(`${API_URL}/api/labels`);
+            if (fetchedLabels) {
+                setLabels(fetchedLabels);
+                saveLocal(STORAGE_KEY_LABELS, fetchedLabels);
+            }
+
             setLoading(false);
         }
         init();
@@ -194,9 +204,55 @@ export function useExpenses() {
         }
     }, [books, currentBook]);
 
+    const addLabel = useCallback(async (name: string, color: string) => {
+        const result = await tryFetch<Label>(`${API_URL}/api/labels`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, color }),
+        });
+        if (result) {
+            setLabels(prev => {
+                const updated = [...prev, result];
+                saveLocal(STORAGE_KEY_LABELS, updated);
+                return updated;
+            });
+        }
+    }, []);
+
+    const updateLabel = useCallback(async (id: string, name: string, color: string) => {
+        const result = await tryFetch<Label>(`${API_URL}/api/labels/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, color }),
+        });
+        if (result) {
+            setLabels(prev => {
+                const updated = prev.map(l => l.id === id ? result : l);
+                saveLocal(STORAGE_KEY_LABELS, updated);
+                return updated;
+            });
+        }
+    }, []);
+
+    const deleteLabel = useCallback(async (id: string) => {
+        const result = await tryFetch<{ success: boolean }>(`${API_URL}/api/labels/${id}`, {
+            method: 'DELETE',
+        });
+        if (result) {
+            setLabels(prev => {
+                const updated = prev.filter(l => l.id !== id);
+                saveLocal(STORAGE_KEY_LABELS, updated);
+                return updated;
+            });
+            // Remove label_id from expenses locally that had this label
+            setExpenses(prev => prev.map(e => e.label_id === id ? { ...e, label_id: undefined } : e));
+        }
+    }, []);
+
     return {
         expenses,
         books,
+        labels,
         currentBook,
         loading,
         isOnline,
@@ -207,6 +263,9 @@ export function useExpenses() {
         selectBook,
         createBook,
         renameBook,
-        deleteBook
+        deleteBook,
+        addLabel,
+        updateLabel,
+        deleteLabel,
     };
 }

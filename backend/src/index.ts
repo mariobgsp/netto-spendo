@@ -102,21 +102,86 @@ app.delete('/api/books/:id', async (req, res) => {
     }
 });
 
+// ─── GET all labels ──────────────────────────────────────
+app.get('/api/labels', async (_req, res) => {
+    try {
+        const result = await pool.query('SELECT id, name, color, created_at FROM labels ORDER BY created_at ASC');
+        res.json(result.rows);
+    } catch (err) {
+        console.error('GET /api/labels error:', err);
+        res.status(500).json({ error: 'Failed to fetch labels' });
+    }
+});
+
+// ─── POST create label ───────────────────────────────────
+app.post('/api/labels', async (req, res) => {
+    try {
+        const { name, color } = req.body;
+        if (!name) {
+            res.status(400).json({ error: 'name is required' });
+            return;
+        }
+        const result = await pool.query(
+            `INSERT INTO labels (name, color) VALUES ($1, $2) RETURNING id, name, color, created_at`,
+            [name, color || '#a1a1aa']
+        );
+        res.status(201).json(result.rows[0]);
+    } catch (err) {
+        console.error('POST /api/labels error:', err);
+        res.status(500).json({ error: 'Failed to create label' });
+    }
+});
+
+// ─── PUT update label ────────────────────────────────────
+app.put('/api/labels/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { name, color } = req.body;
+        if (!name) {
+            res.status(400).json({ error: 'name is required' });
+            return;
+        }
+        const result = await pool.query(
+            `UPDATE labels SET name = $1, color = $2 WHERE id = $3 RETURNING id, name, color, created_at`,
+            [name, color || '#a1a1aa', id]
+        );
+        if (result.rowCount === 0) {
+            res.status(404).json({ error: 'Label not found' });
+            return;
+        }
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error('PUT /api/labels/:id error:', err);
+        res.status(500).json({ error: 'Failed to update label' });
+    }
+});
+
+// ─── DELETE label ────────────────────────────────────────
+app.delete('/api/labels/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const result = await pool.query('DELETE FROM labels WHERE id = $1', [id]);
+        if (result.rowCount === 0) {
+            res.status(404).json({ error: 'Label not found' });
+            return;
+        }
+        res.json({ success: true });
+    } catch (err) {
+        console.error('DELETE /api/labels/:id error:', err);
+        res.status(500).json({ error: 'Failed to delete label' });
+    }
+});
+
 // ─── GET expenses (filtered by book) ────────────────────
 app.get('/api/expenses', async (req, res) => {
     try {
         const { bookId } = req.query;
-        let query = 'SELECT id, amount, description, date, type, is_archived, book_id FROM expenses WHERE is_archived = FALSE';
+        let query = 'SELECT id, amount, description, date, type, is_archived, book_id, label_id FROM expenses WHERE is_archived = FALSE';
         const params: any[] = [];
 
         if (bookId) {
             query += ' AND book_id = $1';
             params.push(bookId);
-        } else {
-            // If no specific book requested, maybe default to the latest open book? 
-            // Or just return all unarchived?
-            // For safety/backward compat, let's just return all unarchived.
-            // But UI should send bookId.
         }
 
         query += ' ORDER BY date DESC';
@@ -129,7 +194,8 @@ app.get('/api/expenses', async (req, res) => {
             date: row.date.toISOString(),
             type: row.type,
             is_archived: row.is_archived,
-            book_id: row.book_id
+            book_id: row.book_id,
+            label_id: row.label_id ?? undefined,
         }));
         res.json(expenses);
     } catch (err) {
@@ -204,7 +270,7 @@ app.post('/api/expenses/close-book', async (req, res) => {
 // ─── POST create expense ──────────────────────────────
 app.post('/api/expenses', async (req, res) => {
     try {
-        const { amount, description, date, type, bookId } = req.body;
+        const { amount, description, date, type, bookId, label_id } = req.body;
 
         if (!amount || !description || !bookId) {
             res.status(400).json({ error: 'amount, description, and bookId are required' });
@@ -212,8 +278,8 @@ app.post('/api/expenses', async (req, res) => {
         }
 
         const result = await pool.query(
-            'INSERT INTO expenses (amount, description, date, type, book_id) VALUES ($1, $2, $3, $4, $5) RETURNING id, amount, description, date, type, book_id',
-            [amount, description, date || new Date().toISOString(), type || 'expense', bookId]
+            'INSERT INTO expenses (amount, description, date, type, book_id, label_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, amount, description, date, type, book_id, label_id',
+            [amount, description, date || new Date().toISOString(), type || 'expense', bookId, label_id || null]
         );
 
         const row = result.rows[0];
@@ -223,7 +289,8 @@ app.post('/api/expenses', async (req, res) => {
             description: row.description,
             date: row.date.toISOString(),
             type: row.type,
-            book_id: row.book_id
+            book_id: row.book_id,
+            label_id: row.label_id ?? undefined,
         });
     } catch (err) {
         console.error('POST /api/expenses error:', err);
@@ -235,7 +302,7 @@ app.post('/api/expenses', async (req, res) => {
 app.put('/api/expenses/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { amount, description, date, type } = req.body;
+        const { amount, description, date, type, label_id } = req.body;
 
         if (!amount || !description) {
             res.status(400).json({ error: 'amount and description are required' });
@@ -243,8 +310,8 @@ app.put('/api/expenses/:id', async (req, res) => {
         }
 
         const result = await pool.query(
-            'UPDATE expenses SET amount = $1, description = $2, date = $3, type = $4 WHERE id = $5 RETURNING id, amount, description, date, type, book_id',
-            [amount, description, date || new Date().toISOString(), type || 'expense', id]
+            'UPDATE expenses SET amount = $1, description = $2, date = $3, type = $4, label_id = $5 WHERE id = $6 RETURNING id, amount, description, date, type, book_id, label_id',
+            [amount, description, date || new Date().toISOString(), type || 'expense', label_id || null, id]
         );
 
         if (result.rowCount === 0) {
@@ -259,7 +326,8 @@ app.put('/api/expenses/:id', async (req, res) => {
             description: row.description,
             date: row.date.toISOString(),
             type: row.type,
-            book_id: row.book_id
+            book_id: row.book_id,
+            label_id: row.label_id ?? undefined,
         });
     } catch (err) {
         console.error('PUT /api/expenses error:', err);
