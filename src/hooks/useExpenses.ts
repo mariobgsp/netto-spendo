@@ -1,271 +1,273 @@
+'use client';
+
 import { useState, useEffect, useCallback } from 'react';
-import type { Expense, Book, Label } from '../types';
-
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
-const STORAGE_KEY_EXPENSES = 'netto-spendo-expenses';
-const STORAGE_KEY_BOOKS = 'netto-spendo-books';
-const STORAGE_KEY_LABELS = 'netto-spendo-labels';
-
-function loadLocal<T>(key: string): T[] {
-    try {
-        const raw = localStorage.getItem(key);
-        return raw ? (JSON.parse(raw) as T[]) : [];
-    } catch {
-        return [];
-    }
-}
-
-function saveLocal<T>(key: string, data: T[]): void {
-    localStorage.setItem(key, JSON.stringify(data));
-}
-
-async function tryFetch<T>(url: string, options?: RequestInit): Promise<T | null> {
-    try {
-        const res = await fetch(url, options);
-        if (res.ok) return (await res.json()) as T;
-        return null;
-    } catch {
-        return null;
-    }
-}
+import {
+  collection, doc, getDocs, addDoc, updateDoc, deleteDoc,
+  query, where, orderBy, writeBatch, serverTimestamp
+} from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import type { Expense, Book, Label } from '@/types';
 
 export function useExpenses() {
-    const [expenses, setExpenses] = useState<Expense[]>(() => loadLocal<Expense>(STORAGE_KEY_EXPENSES));
-    const [books, setBooks] = useState<Book[]>(() => loadLocal<Book>(STORAGE_KEY_BOOKS));
-    const [labels, setLabels] = useState<Label[]>(() => loadLocal<Label>(STORAGE_KEY_LABELS));
-    const [currentBook, setCurrentBook] = useState<Book | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [isOnline, setIsOnline] = useState(false);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [books, setBooks] = useState<Book[]>([]);
+  const [labels, setLabels] = useState<Label[]>([]);
+  const [currentBook, setCurrentBook] = useState<Book | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState(true); // Assuming true, offline handled by Firestore
 
-    // Initial load
-    useEffect(() => {
-        async function init() {
-            // 1. Fetch Books
-            const fetchedBooks = await tryFetch<Book[]>(`${API_URL}/api/books`);
-            if (fetchedBooks) {
-                setIsOnline(true);
-                setBooks(fetchedBooks);
-                saveLocal(STORAGE_KEY_BOOKS, fetchedBooks);
-
-                // Set current book (default to first active or just first)
-                if (fetchedBooks.length > 0) {
-                    // Prefer the first book (which is sorted by start_date DESC in backend)
-                    setCurrentBook(fetchedBooks[0]);
-                }
-            } else {
-                // Offline: use local books, set first as current
-                if (books.length > 0) {
-                    setCurrentBook(books[0]);
-                }
-            }
-
-            // 2. Fetch Labels
-            const fetchedLabels = await tryFetch<Label[]>(`${API_URL}/api/labels`);
-            if (fetchedLabels) {
-                setLabels(fetchedLabels);
-                saveLocal(STORAGE_KEY_LABELS, fetchedLabels);
-            }
-
-            setLoading(false);
-        }
-        init();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
-    // Load expenses when currentBook changes
-    useEffect(() => {
-        if (!currentBook) {
-            setExpenses([]);
-            return;
+  // Initial load
+  useEffect(() => {
+    async function init() {
+      try {
+        const booksSnap = await getDocs(
+          query(collection(db, 'books'), orderBy('start_date', 'desc'))
+        );
+        const fetchedBooks = booksSnap.docs.map(d => {
+          const data = d.data();
+          return {
+            id: d.id,
+            name: data.name,
+            start_date: data.start_date?.toDate?.().toISOString() || data.start_date,
+            end_date: data.end_date?.toDate?.().toISOString() || data.end_date,
+            created_at: data.created_at?.toDate?.().toISOString() || data.created_at,
+          };
+        }) as Book[];
+        
+        setBooks(fetchedBooks);
+        if (fetchedBooks.length > 0) {
+          setCurrentBook(fetchedBooks[0]);
         }
 
-        async function loadExpenses() {
-            const data = await tryFetch<Expense[]>(`${API_URL}/api/expenses?bookId=${currentBook?.id}`);
-            if (data) {
-                setExpenses(data);
-                saveLocal(STORAGE_KEY_EXPENSES, data); // Note: this might overwrite other books' cache?
-                // For simplicity, we just cache the *current view* locally.
-                // A better approach would be to cache by bookId key.
-            }
-        }
-        loadExpenses();
-    }, [currentBook]);
+        const labelsSnap = await getDocs(
+          query(collection(db, 'labels'), orderBy('created_at', 'asc'))
+        );
+        const fetchedLabels = labelsSnap.docs.map(d => ({
+          id: d.id,
+          ...d.data(),
+          created_at: d.data().created_at?.toDate?.().toISOString() || d.data().created_at,
+        })) as Label[];
+        
+        setLabels(fetchedLabels);
+      } catch (error) {
+        console.error("Error loading initial data:", error);
+      } finally {
+        setLoading(false);
+      }
+    }
+    init();
+  }, []);
 
-    const selectBook = useCallback((book: Book) => {
-        setCurrentBook(book);
-    }, []);
+  // Load expenses when currentBook changes
+  useEffect(() => {
+    if (!currentBook) {
+      setExpenses([]);
+      return;
+    }
 
-    const createBook = useCallback(async (name: string) => {
-        const result = await tryFetch<Book>(`${API_URL}/api/books`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name }),
-        });
+    async function loadExpenses() {
+      try {
+        const q = query(
+          collection(db, 'expenses'),
+          where('book_id', '==', currentBook!.id),
+          where('is_archived', '==', false),
+          orderBy('date', 'desc')
+        );
+        const snap = await getDocs(q);
+        const data = snap.docs.map(d => {
+            const expenseData = d.data();
+            return {
+                id: d.id,
+                ...expenseData,
+                date: expenseData.date?.toDate?.().toISOString() || expenseData.date,
+            };
+        }) as Expense[];
+        setExpenses(data);
+      } catch (error) {
+        console.error("Error loading expenses:", error);
+      }
+    }
+    loadExpenses();
+  }, [currentBook]);
 
-        if (result) {
-            setBooks(prev => [result, ...prev]);
-            saveLocal(STORAGE_KEY_BOOKS, [result, ...books]);
-            setCurrentBook(result); // Switch to new book
-        }
-    }, [books]);
+  const selectBook = useCallback((book: Book) => {
+    setCurrentBook(book);
+  }, []);
 
-    const renameBook = useCallback(async (id: string, name: string) => {
-        const result = await tryFetch<Book>(`${API_URL}/api/books/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name }),
-        });
-
-        if (result) {
-            setBooks(prev => prev.map(b => b.id === id ? result : b));
-            if (currentBook?.id === id) {
-                setCurrentBook(result);
-            }
-        }
-    }, [books, currentBook]);
-
-    const addExpense = useCallback(async (expense: Omit<Expense, 'id'>) => {
-        if (!currentBook) return;
-
-        // Try API first
-        const created = await tryFetch<Expense>(`${API_URL}/api/expenses`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ...expense, bookId: currentBook.id }),
-        });
-
-        if (created) {
-            setExpenses((prev) => [created, ...prev]);
-        }
-    }, [currentBook]);
-
-    const updateExpense = useCallback(async (id: string, expense: Omit<Expense, 'id'>) => {
-        const updated = await tryFetch<Expense>(`${API_URL}/api/expenses/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(expense),
-        });
-
-        if (updated) {
-            setExpenses((prev) => prev.map((e) => (e.id === id ? updated : e)));
-        }
-    }, []);
-
-    const deleteExpense = useCallback(async (id: string) => {
-        const result = await tryFetch<{ success: boolean }>(`${API_URL}/api/expenses/${id}`, {
-            method: 'DELETE',
-        });
-
-        if (result || !isOnline) {
-            setExpenses((prev) => prev.filter((e) => e.id !== id));
-        }
-    }, [isOnline]);
-
-    const closeBook = useCallback(async (carryForward: boolean) => {
-        if (!isOnline || !currentBook) {
-            alert('Fitur Tutup Buku hanya tersedia saat online dan ada buku aktif.');
-            return;
-        }
-
-        const result = await tryFetch<{ success: boolean, newBookId: string }>(`${API_URL}/api/expenses/close-book`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ carryForward, bookId: currentBook.id }),
-        });
-
-        if (result) {
-            // Re-fetch books to get the new one and the closed one updated
-            const fetchedBooks = await tryFetch<Book[]>(`${API_URL}/api/books`);
-            if (fetchedBooks) {
-                setBooks(fetchedBooks);
-                // Switch to the NEW book
-                const newBook = fetchedBooks.find(b => b.id === result.newBookId);
-                if (newBook) setCurrentBook(newBook);
-            }
-        }
-    }, [isOnline, currentBook]);
-
-    const deleteBook = useCallback(async (id: string) => {
-        const result = await tryFetch<{ success: boolean }>(`${API_URL}/api/books/${id}`, {
-            method: 'DELETE',
-        });
-
-        if (result) {
-            setBooks(prev => {
-                const newBooks = prev.filter(b => b.id !== id);
-                // If we deleted the current book, switch to another one
-                if (currentBook?.id === id) {
-                    const nextBook = newBooks[0] || null;
-                    setCurrentBook(nextBook);
-                }
-                saveLocal(STORAGE_KEY_BOOKS, newBooks);
-                return newBooks;
-            });
-        }
-    }, [books, currentBook]);
-
-    const addLabel = useCallback(async (name: string, color: string) => {
-        const result = await tryFetch<Label>(`${API_URL}/api/labels`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, color }),
-        });
-        if (result) {
-            setLabels(prev => {
-                const updated = [...prev, result];
-                saveLocal(STORAGE_KEY_LABELS, updated);
-                return updated;
-            });
-        }
-    }, []);
-
-    const updateLabel = useCallback(async (id: string, name: string, color: string) => {
-        const result = await tryFetch<Label>(`${API_URL}/api/labels/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ name, color }),
-        });
-        if (result) {
-            setLabels(prev => {
-                const updated = prev.map(l => l.id === id ? result : l);
-                saveLocal(STORAGE_KEY_LABELS, updated);
-                return updated;
-            });
-        }
-    }, []);
-
-    const deleteLabel = useCallback(async (id: string) => {
-        const result = await tryFetch<{ success: boolean }>(`${API_URL}/api/labels/${id}`, {
-            method: 'DELETE',
-        });
-        if (result) {
-            setLabels(prev => {
-                const updated = prev.filter(l => l.id !== id);
-                saveLocal(STORAGE_KEY_LABELS, updated);
-                return updated;
-            });
-            // Remove label_id from expenses locally that had this label
-            setExpenses(prev => prev.map(e => e.label_id === id ? { ...e, label_id: undefined } : e));
-        }
-    }, []);
-
-    return {
-        expenses,
-        books,
-        labels,
-        currentBook,
-        loading,
-        isOnline,
-        addExpense,
-        updateExpense,
-        deleteExpense,
-        closeBook,
-        selectBook,
-        createBook,
-        renameBook,
-        deleteBook,
-        addLabel,
-        updateLabel,
-        deleteLabel,
+  const createBook = useCallback(async (name: string) => {
+    const docRef = await addDoc(collection(db, 'books'), {
+      name,
+      start_date: serverTimestamp(),
+      created_at: serverTimestamp()
+    });
+    
+    const newBook: Book = {
+        id: docRef.id,
+        name,
+        start_date: new Date().toISOString(),
+        created_at: new Date().toISOString()
     };
+    
+    setBooks(prev => [newBook, ...prev]);
+    setCurrentBook(newBook);
+  }, []);
+
+  const renameBook = useCallback(async (id: string, name: string) => {
+    await updateDoc(doc(db, 'books', id), { name });
+    
+    setBooks(prev => prev.map(b => b.id === id ? { ...b, name } : b));
+    if (currentBook?.id === id) {
+      setCurrentBook(prev => prev ? { ...prev, name } : null);
+    }
+  }, [currentBook]);
+
+  const deleteBook = useCallback(async (id: string) => {
+    // Delete all expenses for this book
+    const expensesSnap = await getDocs(query(collection(db, 'expenses'), where('book_id', '==', id)));
+    const batch = writeBatch(db);
+    
+    expensesSnap.docs.forEach(d => {
+        batch.delete(d.ref);
+    });
+    batch.delete(doc(db, 'books', id));
+    
+    await batch.commit();
+
+    setBooks(prev => {
+      const newBooks = prev.filter(b => b.id !== id);
+      if (currentBook?.id === id) {
+        setCurrentBook(newBooks[0] || null);
+      }
+      return newBooks;
+    });
+  }, [currentBook]);
+
+  const addExpense = useCallback(async (expense: Omit<Expense, 'id'>) => {
+    if (!currentBook) return;
+
+    const newExpenseData = { ...expense, book_id: currentBook.id, is_archived: false };
+    const docRef = await addDoc(collection(db, 'expenses'), newExpenseData);
+    
+    setExpenses(prev => [{ id: docRef.id, ...newExpenseData }, ...prev]);
+  }, [currentBook]);
+
+  const updateExpense = useCallback(async (id: string, expense: Omit<Expense, 'id'>) => {
+    await updateDoc(doc(db, 'expenses', id), expense as any);
+    
+    setExpenses(prev => prev.map(e => e.id === id ? { ...e, ...expense } : e));
+  }, []);
+
+  const deleteExpense = useCallback(async (id: string) => {
+    await deleteDoc(doc(db, 'expenses', id));
+    setExpenses(prev => prev.filter(e => e.id !== id));
+  }, []);
+
+  const closeBook = useCallback(async (carryForward: boolean) => {
+    if (!currentBook) return;
+
+    const balance = expenses.reduce((acc, curr) => {
+        return curr.type === 'income' ? acc + curr.amount : acc - curr.amount;
+    }, 0);
+
+    const batch = writeBatch(db);
+
+    // Archive all current expenses
+    const expensesSnap = await getDocs(
+        query(collection(db, 'expenses'), where('book_id', '==', currentBook.id), where('is_archived', '==', false))
+    );
+    
+    expensesSnap.docs.forEach(d => {
+        batch.update(d.ref, { is_archived: true });
+    });
+
+    // Close current book
+    batch.update(doc(db, 'books', currentBook.id), { end_date: serverTimestamp() });
+
+    // Create new book
+    const newBookRef = doc(collection(db, 'books'));
+    batch.set(newBookRef, {
+        name: 'Buku Baru',
+        start_date: serverTimestamp(),
+        created_at: serverTimestamp()
+    });
+
+    let carryForwardRef = null;
+    let carryForwardData = null;
+    if (carryForward && balance !== 0) {
+        carryForwardRef = doc(collection(db, 'expenses'));
+        carryForwardData = {
+            book_id: newBookRef.id,
+            amount: Math.abs(balance),
+            description: balance > 0 ? 'Saldo Awal (Tutup Buku)' : 'Saldo Awal (Minus)',
+            type: balance > 0 ? 'income' : 'expense',
+            date: new Date().toISOString(), // Use JS Date string to immediately reflect locally
+            is_archived: false
+        };
+        batch.set(carryForwardRef, carryForwardData);
+    }
+
+    await batch.commit();
+    
+    // Refresh books
+    const booksSnap = await getDocs(
+        query(collection(db, 'books'), orderBy('start_date', 'desc'))
+    );
+    const fetchedBooks = booksSnap.docs.map(d => {
+        const data = d.data();
+        return {
+        id: d.id,
+        name: data.name,
+        start_date: data.start_date?.toDate?.().toISOString() || data.start_date,
+        end_date: data.end_date?.toDate?.().toISOString() || data.end_date,
+        created_at: data.created_at?.toDate?.().toISOString() || data.created_at,
+        };
+    }) as Book[];
+    
+    setBooks(fetchedBooks);
+    
+    const newBook = fetchedBooks.find(b => b.id === newBookRef.id);
+    if (newBook) {
+        setCurrentBook(newBook);
+    }
+  }, [currentBook, expenses]);
+
+  const addLabel = useCallback(async (name: string, color: string) => {
+    const docRef = await addDoc(collection(db, 'labels'), {
+        name,
+        color,
+        created_at: serverTimestamp()
+    });
+    setLabels(prev => [...prev, { id: docRef.id, name, color, created_at: new Date().toISOString() }]);
+  }, []);
+
+  const updateLabel = useCallback(async (id: string, name: string, color: string) => {
+    await updateDoc(doc(db, 'labels', id), { name, color });
+    setLabels(prev => prev.map(l => l.id === id ? { ...l, name, color } : l));
+  }, []);
+
+  const deleteLabel = useCallback(async (id: string) => {
+    await deleteDoc(doc(db, 'labels', id));
+    setLabels(prev => prev.filter(l => l.id !== id));
+    setExpenses(prev => prev.map(e => e.label_id === id ? { ...e, label_id: undefined } : e));
+  }, []);
+
+  return {
+    expenses,
+    books,
+    labels,
+    currentBook,
+    loading,
+    isOnline,
+    addExpense,
+    updateExpense,
+    deleteExpense,
+    closeBook,
+    selectBook,
+    createBook,
+    renameBook,
+    deleteBook,
+    addLabel,
+    updateLabel,
+    deleteLabel,
+  };
 }

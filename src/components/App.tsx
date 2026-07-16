@@ -1,14 +1,15 @@
+'use client';
+
 import { useState, useMemo } from 'react';
-import { useExpenses } from './hooks/useExpenses';
-import { ExpenseForm } from './components/ExpenseForm';
-import { ExpenseList } from './components/ExpenseList';
-import { SpendingChart } from './components/SpendingChart';
-import { SummaryCards } from './components/SummaryCards';
-import { CloseBookModal } from './components/CloseBookModal';
-import { BookList } from './components/BookList';
-import { LabelManager } from './components/LabelManager';
-import type { ChartView } from './types';
-import './index.css';
+import { useExpenses } from '@/hooks/useExpenses';
+import { ExpenseForm } from './ExpenseForm';
+import { ExpenseList } from './ExpenseList';
+import { SpendingChart } from './SpendingChart';
+import { SummaryCards } from './SummaryCards';
+import { CloseBookModal } from './CloseBookModal';
+import { BookList } from './BookList';
+import { LabelManager } from './LabelManager';
+import type { ChartView } from '@/types';
 
 function App() {
     const {
@@ -48,7 +49,7 @@ function App() {
                     <div className="brand">
                         <h1>Netto Spendo</h1>
                         {currentBook && <span className="current-book-badge">{currentBook.name}</span>}
-                        {!isOnline && <span className="offline-badge">Offline Mode</span>}
+                        {!isOnline && <span className="offline-dot" title="Offline Mode"></span>}
                     </div>
                     {currentBook && !currentBook.end_date && (
                         <button
@@ -127,7 +128,7 @@ function App() {
             />
 
             <footer className="app-footer">
-                <p>© 2026 Netto Spendo. Data disimpan di PostgreSQL.</p>
+                <p>© 2026 Netto Spendo. Data disimpan aman di Firebase Firestore.</p>
             </footer>
         </div>
     );

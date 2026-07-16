@@ -30,3 +30,18 @@ pgdata/
 
 # TypeScript
 *.tsbuildinfo
+
+# Next.js
+.next/
+out/
+public/sw.js
+public/workbox-*.js
+public/sw.js.map
+public/workbox-*.js.map
+
+# Firebase
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+.firebaserc
+.env.local

@@ -1,3 +1,4 @@
+'use client';
 import React, { useState } from 'react';
 import type { Expense, TransactionType, Label } from '../types';
 
